@@ -52,6 +52,37 @@ dotnet build
 dotnet test
 ```
 
+### HTTP Endpoints
+
+The `OffHireController` exposes two endpoints for demonstrating both customer updates and internal
+Recon triggers as HTTP calls:
+
+* `POST /api/offhire/update` – Accepts the public update payload (`UpdateOffHireRequest`).
+* `POST /api/offhire/internal/recon` – Accepts the internal Recon payload (`ReconOffHireRequest`) so
+  the Recon workflow can be exercised without an Azure Function.
+
+Example Recon request body:
+
+```json
+{
+  "OffHireOrders": {
+    "OffHireOrder": {
+      "RentalNumber": "0106-2007937",
+      "AccountNumber": "180018063",
+      "CompanyCode": "sas",
+      "Line": [
+        {
+          "RentalDeviceLineNumber": "RDL-718319883",
+          "Quantity": "1.000000",
+          "CollectionDateTime": "2025-10-10T08:00:00",
+          "ExternalLineReference": "1233"
+        }
+      ]
+    }
+  }
+}
+```
+
 ## Next Steps
 
 * Replace the Dynamics client stub with the production integration.

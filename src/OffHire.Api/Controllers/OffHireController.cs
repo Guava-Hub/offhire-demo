@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using OffHire.Api.Contracts;
 using OffHire.Application.Commands;
 using OffHire.Domain.Models;
+using OffHire.Domain.ValueObjects;
 
 namespace OffHire.Api.Controllers;
 
@@ -13,10 +14,14 @@ namespace OffHire.Api.Controllers;
 public sealed class OffHireController : ControllerBase
 {
     private readonly UpsertOffHireOrderCommandHandler _commandHandler;
+    private readonly ProcessReconOffHireCommandHandler _reconCommandHandler;
 
-    public OffHireController(UpsertOffHireOrderCommandHandler commandHandler)
+    public OffHireController(
+        UpsertOffHireOrderCommandHandler commandHandler,
+        ProcessReconOffHireCommandHandler reconCommandHandler)
     {
         _commandHandler = commandHandler;
+        _reconCommandHandler = reconCommandHandler;
     }
 
     [HttpPost("update")]
@@ -50,5 +55,28 @@ public sealed class OffHireController : ControllerBase
 
         var aggregate = await _commandHandler.Handle(command, cancellationToken);
         return Ok(new { aggregate.Id, Lines = aggregate.Lines.Select(line => new { line.ExternalLineNumberRef, RequestedQuantity = line.RequestedQuantity.Value }) });
+    }
+
+    [HttpPost("internal/recon")]
+    public async Task<IActionResult> ProcessReconOffHire([FromBody] ReconOffHireRequest request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        var payload = request.OffHireOrders.OffHireOrder;
+        var reconNotification = ReconOffHireNotification.FromPayload(
+            payload.RentalNumber,
+            payload.AccountNumber,
+            payload.CompanyCode,
+            payload.Line.Select(line => new ReconOffHireLine(
+                line.RentalDeviceLineNumber,
+                Quantity.FromString(line.Quantity),
+                line.CollectionDateTime,
+                line.ExternalLineReference)));
+
+        await _reconCommandHandler.Handle(new ProcessReconOffHireCommand(reconNotification), cancellationToken);
+        return Accepted();
     }
 }
