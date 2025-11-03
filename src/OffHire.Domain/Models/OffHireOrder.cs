@@ -125,6 +125,17 @@ public sealed class OffHireOrder
         _history.AddRange(entries);
     }
 
+    public void RecordDynamicsOutcome(string externalLineNumberRef, Quantity quantity, DateTime occurredAt, string requestId, bool isBackDate)
+    {
+        EnsureLine(externalLineNumberRef);
+        var entry = isBackDate
+            ? OffHireHistoryEntry.DynamicsBackDate(externalLineNumberRef, quantity, occurredAt, requestId)
+            : OffHireHistoryEntry.DynamicsOffHire(externalLineNumberRef, quantity, occurredAt, requestId);
+
+        AddHistory(entry);
+        Touch(occurredAt);
+    }
+
     private void Touch(DateTime at)
     {
         UpdatedAt = at;

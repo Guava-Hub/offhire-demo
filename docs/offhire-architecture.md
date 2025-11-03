@@ -12,16 +12,16 @@ isolate business logic, provide testable boundaries, and facilitate long-term ma
 +---------+---------+        +---------+---------+        +---------+--------+
           |                           |                           |
           v                           v                           v
-  +-------+--------+          +------+-------+           +--------+------+
-  | Update API     |          | Blob Listener|           | Dynamics 365  |
-  | (OffHire.Api)  +--------->+ (FunctionApp)+---------->+ Integration  |
-  +-------+--------+          +------+-------+           +--------+------+
-          |                           |                           ^
+  +-------+--------+          +------+-------+           +--------+------+          +-------------------+
+  | Update API     |          | Service Bus  |           | Azure Functions|          | Dynamics 365      |
+  | (OffHire.Api)  +--------->+ Topic        +---------->+  Subscriptions +--------->+ Integration Layer |
+  +-------+--------+          +------+-------+           +--------+------+          +-------------------+
+          |                           |                           |
           v                           v                           |
   +-------+--------+          +------+-------+           +--------+------+
-  | Application    |          | Application |           | Cosmos DB     |
-  | Services       |          | Services    |           | (history +    |
-  +-------+--------+          +------+-------+           | aggregates)   |
+  | Application    |          | Core Sub     |           | Queue Trigger |
+  | Services       |          | (Cosmos)     |           | (Dynamics     |
+  +-------+--------+          +------+-------+           | Outcomes)     |
           |                           |                   +--------------+
           v                           v
   +-------+--------+          +------+-------+
@@ -120,12 +120,23 @@ partial updates.
 ## Key Use Cases
 
 ### 1. Customer Update API
-* Validates and normalizes incoming payloads into `OffHireOrder` aggregates.
-* Merges multiple API calls by external line reference. Quantities are stored as the customer
-  expectation (`requestedQuantity`) while allocations are seeded with outstanding quantity.
-* Emits domain events (`LineRequestedOffHire`) to drive asynchronous integration (e.g. notify Recon
-  or schedule follow-up tasks).
-* Writes aggregate snapshot into Cosmos.
+* Validates and normalizes incoming payloads into `OffHireOrderMessage` envelopes.
+* Publishes the message to an Azure Service Bus topic via `IOffHireOrderPublisher`. The topic
+  exposes two subscriptions (`core`, `dynamics`) so downstream handlers can process the message
+  independently.
+* Returns an HTTP 202 immediately because persistence and integrations are now asynchronous.
+
+### Service Bus Orchestration
+* **Core Subscription** – Implemented by `CoreSubscriptionHandler`, deserialises the message into an
+  `UpsertOffHireOrderCommand` and uses `UpsertOffHireOrderCommandHandler` to upsert the aggregate in
+  Cosmos (`CosmosOffHireOrderRepository`). This subscription is the single writer to Cosmos for API
+  updates.
+* **Dynamics Subscription** – Implemented by `DynamicsSubscriptionHandler`, forwards the payload to
+  `IDynamicsService` and posts a `DynamicsResultMessage` to a queue once Dynamics confirms
+  processing.
+* **Queue Trigger** – Represented by `DynamicsResultProcessor`, consumes the queue message and calls
+  `OffHireOrder.RecordDynamicsOutcome` so Cosmos documents are enriched with the Dynamics result
+  history.
 
 ### 2. Recon-triggered Core Off-Hire
 1. Recon uploads a JSON payload to blob storage.

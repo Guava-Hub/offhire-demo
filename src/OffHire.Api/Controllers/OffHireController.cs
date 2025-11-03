@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using OffHire.Api.Contracts;
+using OffHire.Application.Abstractions;
 using OffHire.Application.Commands;
 using OffHire.Domain.Models;
 using OffHire.Domain.ValueObjects;
@@ -13,14 +14,14 @@ namespace OffHire.Api.Controllers;
 [Route("api/offhire")]
 public sealed class OffHireController : ControllerBase
 {
-    private readonly UpsertOffHireOrderCommandHandler _commandHandler;
+    private readonly IOffHireOrderPublisher _orderPublisher;
     private readonly ProcessReconOffHireCommandHandler _reconCommandHandler;
 
     public OffHireController(
-        UpsertOffHireOrderCommandHandler commandHandler,
+        IOffHireOrderPublisher orderPublisher,
         ProcessReconOffHireCommandHandler reconCommandHandler)
     {
-        _commandHandler = commandHandler;
+        _orderPublisher = orderPublisher;
         _reconCommandHandler = reconCommandHandler;
     }
 
@@ -39,22 +40,31 @@ public sealed class OffHireController : ControllerBase
         }
 
         var firstOrder = request.OffHireOrders.First();
-        var command = new UpsertOffHireOrderCommand(
+        var message = new OffHireOrderMessage(
             ContractNumber: contractNumber,
             RentalNumber: contractNumber,
             AccountNumber: string.Empty,
             CompanyCode: "sas",
             Originator: new Originator("WebAPI", "ExternalClients", string.Empty),
             RequestedAt: request.DateTimeRequested,
-            Lines: firstOrder.Lines.Select(line => new LineRequest(
+            Lines: firstOrder.Lines.Select(line => new OffHireOrderLineMessage(
                 line.ExternalLineNumberRef,
                 line.LineNumberReference,
                 line.Quantity,
                 line.OffHireDateTime,
                 line.CollectionInstructions)).ToList());
 
-        var aggregate = await _commandHandler.Handle(command, cancellationToken);
-        return Ok(new { aggregate.Id, Lines = aggregate.Lines.Select(line => new { line.ExternalLineNumberRef, RequestedQuantity = line.RequestedQuantity.Value }) });
+        await _orderPublisher.PublishAsync(message, cancellationToken);
+
+        return Accepted(new
+        {
+            message.ContractNumber,
+            Lines = message.Lines.Select(line => new
+            {
+                line.ExternalLineNumberRef,
+                RequestedQuantity = line.Quantity
+            })
+        });
     }
 
     [HttpPost("internal/recon")]
