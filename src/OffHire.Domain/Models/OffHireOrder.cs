@@ -125,6 +125,12 @@ public sealed class OffHireOrder
         _history.AddRange(entries);
     }
 
+    internal void LoadLines(IEnumerable<OffHireLine> lines)
+    {
+        _lines.Clear();
+        _lines.AddRange(lines);
+    }
+
     private void Touch(DateTime at)
     {
         UpdatedAt = at;

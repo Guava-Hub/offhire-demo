@@ -12,7 +12,7 @@ public sealed class OffHireLine
     private OffHireLine(string externalLineNumberRef, string collectionInstructions)
     {
         ExternalLineNumberRef = externalLineNumberRef;
-        CollectionInstructions = collectionInstructions;
+        CollectionInstructions = collectionInstructions ?? string.Empty;
     }
 
     public string ExternalLineNumberRef { get; }
@@ -25,6 +25,28 @@ public sealed class OffHireLine
 
     public static OffHireLine Create(string externalLineNumberRef, string collectionInstructions)
         => new(externalLineNumberRef, collectionInstructions);
+
+    internal static OffHireLine LoadFromPersistence(
+        string externalLineNumberRef,
+        string collectionInstructions,
+        IEnumerable<PersistedAllocation> allocations)
+    {
+        var line = new OffHireLine(externalLineNumberRef, collectionInstructions);
+
+        foreach (var allocation in allocations ?? Enumerable.Empty<PersistedAllocation>())
+        {
+            line._allocations.Add(
+                LineAllocation.LoadFromPersistence(
+                    allocation.RentalDeviceLineNumber,
+                    allocation.RequestedQuantity,
+                    allocation.RemainingQuantity,
+                    allocation.PlannedOffHireDate,
+                    allocation.Status,
+                    allocation.History ?? Enumerable.Empty<AllocationHistory>()));
+        }
+
+        return line;
+    }
 
     public void MergeRequest(IEnumerable<string> rentalDeviceLineNumbers, Quantity requestedQuantity, DateTime offHireDateTime)
     {
@@ -107,6 +129,22 @@ public sealed class LineAllocation
         AddHistory(AllocationHistory.Requested(requestedQuantity, offHireDateTime));
     }
 
+    private LineAllocation(
+        string rentalDeviceLineNumber,
+        Quantity requestedQuantity,
+        Quantity remainingQuantity,
+        DateTime plannedOffHireDate,
+        AllocationStatus status,
+        IEnumerable<AllocationHistory> history)
+    {
+        RentalDeviceLineNumber = rentalDeviceLineNumber;
+        RequestedQuantity = requestedQuantity;
+        RemainingQuantity = remainingQuantity;
+        PlannedOffHireDate = plannedOffHireDate;
+        Status = status;
+        _history.AddRange(history ?? Enumerable.Empty<AllocationHistory>());
+    }
+
     public string RentalDeviceLineNumber { get; }
 
     public Quantity RequestedQuantity { get; private set; }
@@ -121,6 +159,15 @@ public sealed class LineAllocation
 
     public static LineAllocation Create(string rentalDeviceLineNumber, Quantity requestedQuantity, DateTime offHireDateTime)
         => new(rentalDeviceLineNumber, requestedQuantity, offHireDateTime);
+
+    internal static LineAllocation LoadFromPersistence(
+        string rentalDeviceLineNumber,
+        Quantity requestedQuantity,
+        Quantity remainingQuantity,
+        DateTime plannedOffHireDate,
+        AllocationStatus status,
+        IEnumerable<AllocationHistory> history)
+        => new(rentalDeviceLineNumber, requestedQuantity, remainingQuantity, plannedOffHireDate, status, history);
 
     public void UpdateRequestedQuantity(Quantity quantity, DateTime offHireDateTime)
     {
@@ -160,6 +207,14 @@ public sealed class LineAllocation
 
     private void AddHistory(AllocationHistory historyEntry) => _history.Add(historyEntry);
 }
+
+internal sealed record PersistedAllocation(
+    string RentalDeviceLineNumber,
+    Quantity RequestedQuantity,
+    Quantity RemainingQuantity,
+    AllocationStatus Status,
+    DateTime PlannedOffHireDate,
+    IEnumerable<AllocationHistory> History);
 
 public sealed record AllocationHistory(string EventType, Quantity Quantity, DateTime OccurredAt, string Reason)
 {
