@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -49,15 +50,24 @@ public sealed class CosmosOffHireOrderRepository : IOffHireOrderRepository
             new Originator(document.Origin.Source, document.Origin.ClientSystem, document.Origin.UserName),
             document.DateTimeRequested);
 
-        foreach (var line in document.Lines)
+        var lines = document.Lines.Select(line =>
         {
-            aggregate.UpsertLine(
-                line.ExternalLineNumberRef,
-                line.Allocations.Select(a => a.RentalDeviceLineNumber),
-                new Quantity(line.RequestedQuantity),
-                line.OffHireDateTime,
-                line.CollectionInstructions);
-        }
+            var allocations = line.Allocations.Select(allocation => new PersistedAllocation(
+                allocation.RentalDeviceLineNumber,
+                new Quantity(allocation.RequestedQuantity),
+                new Quantity(allocation.RemainingQuantity),
+                Enum.Parse<AllocationStatus>(allocation.Status, ignoreCase: true),
+                allocation.PlannedOffHireDate,
+                allocation.History.Select(history => new AllocationHistory(
+                    history.EventType,
+                    new Quantity(history.Quantity),
+                    history.OccurredAt,
+                    history.Reason)).ToList()));
+
+            return OffHireLine.LoadFromPersistence(line.ExternalLineNumberRef, line.CollectionInstructions, allocations);
+        }).ToList();
+
+        aggregate.LoadLines(lines);
 
         var history = document.History.Select(entry => new OffHireHistoryEntry(
             entry.ExternalLineNumberRef,
