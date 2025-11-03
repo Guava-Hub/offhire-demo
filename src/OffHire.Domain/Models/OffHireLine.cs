@@ -226,6 +226,13 @@ public sealed record AllocationHistory(string EventType, Quantity Quantity, Date
 
     public static AllocationHistory PushedToPast(Quantity quantity, DateTime when, string reason)
         => new("PushedToPast", quantity, when, reason);
+
+    public static AllocationHistory DynamicsUpdateDate(DateTime when, bool succeeded, string details)
+        => new(
+            succeeded ? "DynamicsUpdateDateSucceeded" : "DynamicsUpdateDateFailed",
+            Quantity.Zero,
+            when,
+            details);
 }
 
 public enum AllocationStatus
