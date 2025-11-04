@@ -79,6 +79,10 @@ public sealed class CosmosOffHireOrderRepository : IOffHireOrderRepository
 
         aggregate.LoadHistory(history);
 
+        var requester = document.Requester is not null ? MapRequester(document.Requester) : null;
+        var header = document.Header is not null ? MapHeader(document.Header) : null;
+        aggregate.LoadRequestDetails(requester, header);
+
         return aggregate;
     }
 
@@ -98,6 +102,8 @@ public sealed class CosmosOffHireOrderRepository : IOffHireOrderRepository
                 ClientSystem = aggregate.Originator.ClientSystem,
                 UserName = aggregate.Originator.UserName
             },
+            Requester = MapRequester(aggregate.Requester),
+            Header = MapHeader(aggregate.Header),
             Lines = aggregate.Lines.Select(line => new CosmosOffHireLine
             {
                 ExternalLineNumberRef = line.ExternalLineNumberRef,
@@ -127,10 +133,107 @@ public sealed class CosmosOffHireOrderRepository : IOffHireOrderRepository
                 Quantity = entry.Quantity.Value,
                 OccurredAt = entry.OccurredAt,
                 Trigger = entry.Trigger,
-                Notes = entry.Notes
-            }).ToList()
-        };
+            Notes = entry.Notes
+        }).ToList()
+    };
     }
+
+    private static Requester MapRequester(CosmosRequester requester)
+        => new(
+            new PersonDetails(
+                requester.PersonDetails.Title,
+                requester.PersonDetails.Name,
+                requester.PersonDetails.DateOfBirth),
+            new ContactDetails(
+                requester.ContactDetails.TelephoneNumber,
+                requester.ContactDetails.MobileNumber,
+                requester.ContactDetails.FaxNumber,
+                requester.ContactDetails.EmailAddress));
+
+    private static OffHireHeader MapHeader(CosmosHeader header)
+        => new(
+            header.CollectionNotes,
+            new SpeedyReferences(header.SpeedyReferences.ContractNumber),
+            new CollectionDetails(
+                new PersonDetails(
+                    header.CollectionDetails.PersonDetails.Title,
+                    header.CollectionDetails.PersonDetails.Name,
+                    header.CollectionDetails.PersonDetails.DateOfBirth),
+                new CollectionAddress(
+                    header.CollectionDetails.CollectionAddress.Name,
+                    header.CollectionDetails.CollectionAddress.AddressLine1,
+                    header.CollectionDetails.CollectionAddress.AddressLine2,
+                    header.CollectionDetails.CollectionAddress.Street,
+                    header.CollectionDetails.CollectionAddress.City,
+                    header.CollectionDetails.CollectionAddress.County,
+                    header.CollectionDetails.CollectionAddress.PostCode,
+                    header.CollectionDetails.CollectionAddress.State,
+                    header.CollectionDetails.CollectionAddress.Country),
+                new ContactDetails(
+                    header.CollectionDetails.ContactDetails.TelephoneNumber,
+                    header.CollectionDetails.ContactDetails.MobileNumber,
+                    header.CollectionDetails.ContactDetails.FaxNumber,
+                    header.CollectionDetails.ContactDetails.EmailAddress)));
+
+    private static CosmosRequester? MapRequester(Requester? requester)
+        => requester is null
+            ? null
+            : new CosmosRequester
+            {
+                PersonDetails = new CosmosPersonDetails
+                {
+                    Title = requester.PersonDetails.Title,
+                    Name = requester.PersonDetails.Name,
+                    DateOfBirth = requester.PersonDetails.DateOfBirth
+                },
+                ContactDetails = new CosmosContactDetails
+                {
+                    TelephoneNumber = requester.ContactDetails.TelephoneNumber,
+                    MobileNumber = requester.ContactDetails.MobileNumber,
+                    FaxNumber = requester.ContactDetails.FaxNumber,
+                    EmailAddress = requester.ContactDetails.EmailAddress
+                }
+            };
+
+    private static CosmosHeader? MapHeader(OffHireHeader? header)
+        => header is null
+            ? null
+            : new CosmosHeader
+            {
+                CollectionNotes = header.CollectionNotes,
+                SpeedyReferences = new CosmosSpeedyReferences
+                {
+                    ContractNumber = header.SpeedyReferences.ContractNumber
+                },
+                CollectionDetails = new CosmosCollectionDetails
+                {
+                    PersonDetails = new CosmosPersonDetails
+                    {
+                        Title = header.CollectionDetails.PersonDetails.Title,
+                        Name = header.CollectionDetails.PersonDetails.Name,
+                        DateOfBirth = header.CollectionDetails.PersonDetails.DateOfBirth
+                    },
+                    CollectionAddress = new CosmosCollectionAddress
+                    {
+                        Name = header.CollectionDetails.CollectionAddress.Name,
+                        AddressLine1 = header.CollectionDetails.CollectionAddress.AddressLine1,
+                        AddressLine2 = header.CollectionDetails.CollectionAddress.AddressLine2,
+                        Street = header.CollectionDetails.CollectionAddress.Street,
+                        City = header.CollectionDetails.CollectionAddress.City,
+                        County = header.CollectionDetails.CollectionAddress.County,
+                        PostCode = header.CollectionDetails.CollectionAddress.PostCode,
+                        State = header.CollectionDetails.CollectionAddress.State,
+                        Country = header.CollectionDetails.CollectionAddress.Country
+                    },
+                    ContactDetails = new CosmosContactDetails
+                    {
+                        TelephoneNumber = header.CollectionDetails.ContactDetails.TelephoneNumber,
+                        MobileNumber = header.CollectionDetails.ContactDetails.MobileNumber,
+                        FaxNumber = header.CollectionDetails.ContactDetails.FaxNumber,
+                        EmailAddress = header.CollectionDetails.ContactDetails.EmailAddress
+                    }
+                }
+            };
 
     private sealed class CosmosOffHireDocument
     {
@@ -141,6 +244,8 @@ public sealed class CosmosOffHireOrderRepository : IOffHireOrderRepository
         public string CompanyCode { get; set; } = default!;
         public System.DateTime DateTimeRequested { get; set; }
         public CosmosOrigin Origin { get; set; } = new();
+        public CosmosRequester? Requester { get; set; }
+        public CosmosHeader? Header { get; set; }
         public List<CosmosOffHireLine> Lines { get; set; } = new();
         public List<CosmosHistoryEntry> History { get; set; } = new();
     }
@@ -187,5 +292,58 @@ public sealed class CosmosOffHireOrderRepository : IOffHireOrderRepository
         public System.DateTime OccurredAt { get; set; }
         public string Trigger { get; set; } = string.Empty;
         public string Notes { get; set; } = string.Empty;
+    }
+
+    private sealed class CosmosRequester
+    {
+        public CosmosPersonDetails PersonDetails { get; set; } = new();
+        public CosmosContactDetails ContactDetails { get; set; } = new();
+    }
+
+    private sealed class CosmosPersonDetails
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public System.DateTime? DateOfBirth { get; set; }
+    }
+
+    private sealed class CosmosContactDetails
+    {
+        public string TelephoneNumber { get; set; } = string.Empty;
+        public string MobileNumber { get; set; } = string.Empty;
+        public string FaxNumber { get; set; } = string.Empty;
+        public string EmailAddress { get; set; } = string.Empty;
+    }
+
+    private sealed class CosmosHeader
+    {
+        public string CollectionNotes { get; set; } = string.Empty;
+        public CosmosSpeedyReferences SpeedyReferences { get; set; } = new();
+        public CosmosCollectionDetails CollectionDetails { get; set; } = new();
+    }
+
+    private sealed class CosmosSpeedyReferences
+    {
+        public string ContractNumber { get; set; } = string.Empty;
+    }
+
+    private sealed class CosmosCollectionDetails
+    {
+        public CosmosPersonDetails PersonDetails { get; set; } = new();
+        public CosmosCollectionAddress CollectionAddress { get; set; } = new();
+        public CosmosContactDetails ContactDetails { get; set; } = new();
+    }
+
+    private sealed class CosmosCollectionAddress
+    {
+        public string Name { get; set; } = string.Empty;
+        public string AddressLine1 { get; set; } = string.Empty;
+        public string AddressLine2 { get; set; } = string.Empty;
+        public string Street { get; set; } = string.Empty;
+        public string City { get; set; } = string.Empty;
+        public string County { get; set; } = string.Empty;
+        public string PostCode { get; set; } = string.Empty;
+        public string State { get; set; } = string.Empty;
+        public string Country { get; set; } = string.Empty;
     }
 }

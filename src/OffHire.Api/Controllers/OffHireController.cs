@@ -39,6 +39,7 @@ public sealed class OffHireController : ControllerBase
         }
 
         var firstOrder = request.OffHireOrders.First();
+        var header = firstOrder.Header;
         var command = new UpsertOffHireOrderCommand(
             ContractNumber: contractNumber,
             RentalNumber: contractNumber,
@@ -46,6 +47,39 @@ public sealed class OffHireController : ControllerBase
             CompanyCode: "sas",
             Originator: new Originator("WebAPI", "ExternalClients", string.Empty),
             RequestedAt: request.DateTimeRequested,
+            Requester: new RequesterRequest(
+                new PersonDetailsRequest(
+                    request.Requester.PersonDetails.Title,
+                    request.Requester.PersonDetails.Name,
+                    request.Requester.PersonDetails.DateOfBirth),
+                new ContactDetailsRequest(
+                    request.Requester.ContactDetails.TelephoneNumber,
+                    request.Requester.ContactDetails.MobileNumber,
+                    request.Requester.ContactDetails.FaxNumber,
+                    request.Requester.ContactDetails.EmailAddress)),
+            Header: new OffHireHeaderRequest(
+                header.CollectionNotes,
+                new SpeedyReferencesRequest(header.SpeedyReferences.ContractNumber),
+                new CollectionDetailsRequest(
+                    new PersonDetailsRequest(
+                        header.CollectionDetails.PersonDetails.Title,
+                        header.CollectionDetails.PersonDetails.Name,
+                        header.CollectionDetails.PersonDetails.DateOfBirth),
+                    new CollectionAddressRequest(
+                        header.CollectionDetails.CollectionAddress.Name,
+                        header.CollectionDetails.CollectionAddress.AddressLine1,
+                        header.CollectionDetails.CollectionAddress.AddressLine2,
+                        header.CollectionDetails.CollectionAddress.Street,
+                        header.CollectionDetails.CollectionAddress.City,
+                        header.CollectionDetails.CollectionAddress.County,
+                        header.CollectionDetails.CollectionAddress.PostCode,
+                        header.CollectionDetails.CollectionAddress.State,
+                        header.CollectionDetails.CollectionAddress.Country),
+                    new ContactDetailsRequest(
+                        header.CollectionDetails.ContactDetails.TelephoneNumber,
+                        header.CollectionDetails.ContactDetails.MobileNumber,
+                        header.CollectionDetails.ContactDetails.FaxNumber,
+                        header.CollectionDetails.ContactDetails.EmailAddress))),
             Lines: firstOrder.Lines.Select(line => new LineRequest(
                 line.ExternalLineNumberRef,
                 line.LineNumberReference,

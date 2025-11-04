@@ -50,6 +50,10 @@ public sealed class OffHireOrder
 
     public IReadOnlyCollection<OffHireHistoryEntry> History => _history;
 
+    public Requester? Requester { get; private set; }
+
+    public OffHireHeader? Header { get; private set; }
+
     public static OffHireOrder Create(
         string id,
         string contractNumber,
@@ -129,6 +133,19 @@ public sealed class OffHireOrder
     {
         _lines.Clear();
         _lines.AddRange(lines);
+    }
+
+    internal void LoadRequestDetails(Requester? requester, OffHireHeader? header)
+    {
+        Requester = requester;
+        Header = header;
+    }
+
+    public void UpdateRequestDetails(Requester requester, OffHireHeader header)
+    {
+        Requester = requester;
+        Header = header;
+        Touch(DateTime.UtcNow);
     }
 
     private void Touch(DateTime at)
