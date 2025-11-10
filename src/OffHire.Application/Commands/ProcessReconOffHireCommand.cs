@@ -29,7 +29,20 @@ public sealed class ProcessReconOffHireCommandHandler
     public async Task Handle(ProcessReconOffHireCommand command, CancellationToken cancellationToken)
     {
         var notification = command.Notification;
-        var aggregate = await _repository.FindAsync(notification.RentalNumber, notification.CompanyCode, cancellationToken);
+        OffHireOrder? aggregate = null;
+
+        var rentalDeviceLineNumber = notification.Lines.FirstOrDefault()?.RentalDeviceLineNumber;
+
+        if (rentalDeviceLineNumber is not null)
+        {
+            aggregate = await _repository.FindByRentalDeviceAsync(
+                rentalDeviceLineNumber,
+                notification.CompanyCode,
+                notification.AccountNumber,
+                cancellationToken);
+        }
+
+        aggregate ??= await _repository.FindAsync(notification.RentalNumber, notification.CompanyCode, cancellationToken);
 
         if (aggregate is null)
         {
