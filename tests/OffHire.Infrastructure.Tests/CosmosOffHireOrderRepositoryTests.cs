@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Microsoft.Azure.Cosmos;
 using OffHire.Domain.Models;
 using OffHire.Domain.ValueObjects;
 using OffHire.Infrastructure.Cosmos;
@@ -47,6 +48,21 @@ public class CosmosOffHireOrderRepositoryTests
                 Assert.Equal("OffHired", entry.EventType);
                 Assert.Equal(new DateTime(2024, 4, 29, 15, 30, 0, DateTimeKind.Utc), entry.OccurredAt);
             });
+    }
+
+    [Fact]
+    public void RentalDeviceQuery_ShouldProjectRootDocument()
+    {
+        var method = typeof(CosmosOffHireOrderRepository)
+            .GetMethod("CreateRentalDeviceQueryDefinition", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("CreateRentalDeviceQueryDefinition not found.");
+
+        var query = (QueryDefinition)method.Invoke(null, new object[] { new[] { "RDL-1", "RDL-2" }, "sas" })!;
+
+        Assert.Contains("SELECT VALUE c", query.QueryText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("JOIN l IN c.lines", query.QueryText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("JOIN a IN l.allocations", query.QueryText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ARRAY_CONTAINS(@rentalDeviceLineNumbers, a.rentalDeviceLineNumber)", query.QueryText, StringComparison.OrdinalIgnoreCase);
     }
 
     private static OffHireOrder InvokeMapToDomain(object document)
