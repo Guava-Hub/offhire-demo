@@ -39,6 +39,72 @@ public sealed class CosmosOffHireOrderRepository : IOffHireOrderRepository
         await _container.UpsertItemAsync(document, new PartitionKey(aggregate.CompanyCode), cancellationToken: cancellationToken);
     }
 
+    internal async Task<IReadOnlyCollection<OffHireOrder>> FindByRentalDeviceLineNumbersAsync(
+        IEnumerable<string> rentalDeviceLineNumbers,
+        string companyCode,
+        CancellationToken cancellationToken)
+    {
+        var normalizedDeviceNumbers = rentalDeviceLineNumbers?
+            .Where(number => !string.IsNullOrWhiteSpace(number))
+            .Select(number => number.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray()
+            ?? Array.Empty<string>();
+
+        if (normalizedDeviceNumbers.Length == 0)
+        {
+            return Array.Empty<OffHireOrder>();
+        }
+
+        var documents = await QueryRentalDeviceDocumentsAsync(normalizedDeviceNumbers, companyCode, cancellationToken);
+
+        var uniqueDocuments = documents
+            .GroupBy(document => document.Id, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .ToArray();
+
+        return uniqueDocuments
+            .Select(MapToDomain)
+            .ToArray();
+    }
+
+    private async Task<IReadOnlyCollection<CosmosOffHireDocument>> QueryRentalDeviceDocumentsAsync(
+        IReadOnlyCollection<string> rentalDeviceLineNumbers,
+        string companyCode,
+        CancellationToken cancellationToken)
+    {
+        var iterator = _container.GetItemQueryIterator<CosmosOffHireDocument>(
+            CreateRentalDeviceQueryDefinition(rentalDeviceLineNumbers, companyCode),
+            requestOptions: new QueryRequestOptions
+            {
+                PartitionKey = new PartitionKey(companyCode)
+            });
+
+        var documents = new List<CosmosOffHireDocument>();
+
+        while (iterator.HasMoreResults)
+        {
+            var response = await iterator.ReadNextAsync(cancellationToken);
+            documents.AddRange(response);
+        }
+
+        return documents;
+    }
+
+    private static QueryDefinition CreateRentalDeviceQueryDefinition(
+        IReadOnlyCollection<string> rentalDeviceLineNumbers,
+        string companyCode)
+    {
+        var query = new QueryDefinition(
+            "SELECT VALUE c FROM c JOIN l IN c.lines JOIN a IN l.allocations " +
+            "WHERE c.companyCode = @companyCode " +
+            "AND ARRAY_CONTAINS(@rentalDeviceLineNumbers, a.rentalDeviceLineNumber)")
+            .WithParameter("@companyCode", companyCode)
+            .WithParameter("@rentalDeviceLineNumbers", rentalDeviceLineNumbers);
+
+        return query;
+    }
+
     private static OffHireOrder MapToDomain(CosmosOffHireDocument document)
     {
         var aggregate = OffHireOrder.Create(
