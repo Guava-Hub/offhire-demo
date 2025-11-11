@@ -22,4 +22,17 @@ public sealed record OffHireHistoryEntry(
 
     public static OffHireHistoryEntry DynamicsBackDate(string externalLineNumberRef, Quantity quantity, DateTime at, string requestId)
         => new(externalLineNumberRef, "DynamicsBackDate", quantity, at, "Dynamics", requestId);
+
+    public static OffHireHistoryEntry DynamicsUpdateDate(
+        string externalLineNumberRef,
+        DateTime at,
+        bool succeeded,
+        string details)
+        => new(
+            externalLineNumberRef,
+            succeeded ? "DynamicsUpdateDateSucceeded" : "DynamicsUpdateDateFailed",
+            Quantity.Zero,
+            at,
+            "Dynamics",
+            details);
 }
