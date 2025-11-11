@@ -33,6 +33,40 @@ public sealed class CosmosOffHireOrderRepository : IOffHireOrderRepository
         }
     }
 
+    public async Task<OffHireOrder?> FindByRentalDeviceAsync(
+        string rentalDeviceLineNumber,
+        string companyCode,
+        string accountNumber,
+        CancellationToken cancellationToken)
+    {
+        var query = new QueryDefinition(
+                "SELECT * FROM c JOIN l IN c.lines JOIN a IN l.allocations " +
+                "WHERE c.accountNumber = @accountNumber AND c.companyCode = @companyCode AND a.rentalDeviceLineNumber = @line")
+            .WithParameter("@accountNumber", accountNumber)
+            .WithParameter("@companyCode", companyCode)
+            .WithParameter("@line", rentalDeviceLineNumber);
+
+        var iterator = _container.GetItemQueryIterator<CosmosOffHireDocument>(
+            query,
+            requestOptions: new QueryRequestOptions
+            {
+                PartitionKey = new PartitionKey(companyCode)
+            });
+
+        while (iterator.HasMoreResults)
+        {
+            var response = await iterator.ReadNextAsync(cancellationToken);
+            var document = response.Resource.FirstOrDefault();
+
+            if (document is not null)
+            {
+                return MapToDomain(document);
+            }
+        }
+
+        return null;
+    }
+
     public async Task SaveAsync(OffHireOrder aggregate, CancellationToken cancellationToken)
     {
         var document = MapToDocument(aggregate);

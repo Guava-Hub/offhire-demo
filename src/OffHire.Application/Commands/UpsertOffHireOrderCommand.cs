@@ -38,7 +38,20 @@ public sealed class UpsertOffHireOrderCommandHandler
 
     public async Task<OffHireOrder> Handle(UpsertOffHireOrderCommand command, CancellationToken cancellationToken)
     {
-        var aggregate = await _repository.FindAsync(command.ContractNumber, command.CompanyCode, cancellationToken);
+        OffHireOrder? aggregate = null;
+
+        var rentalDeviceLineNumber = command.Lines.FirstOrDefault()?.LineNumberReferences.FirstOrDefault();
+
+        if (!string.IsNullOrWhiteSpace(rentalDeviceLineNumber) && !string.IsNullOrWhiteSpace(command.AccountNumber))
+        {
+            aggregate = await _repository.FindByRentalDeviceAsync(
+                rentalDeviceLineNumber,
+                command.CompanyCode,
+                command.AccountNumber,
+                cancellationToken);
+        }
+
+        aggregate ??= await _repository.FindAsync(command.ContractNumber, command.CompanyCode, cancellationToken);
 
         if (aggregate is null)
         {
